@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-from multicall import Call, Multicall
+from multicall import Call
+from app.canto_multicall import CantoMulticall as Multicall
 from walrus import Model, TextField, IntegerField, FloatField, HashField
 
 from web3.auto import w3
@@ -14,9 +15,10 @@ from app.settings import (
 )
 from app.assets import Token
 
-# set up private key to web3 
+# set up private key to web3
 account: LocalAccount = Account.from_key(PRIVATE_KEY)
 w3.middleware_onion.add(construct_sign_and_send_raw_middleware(account))
+
 
 class Gauge(Model):
     """Gauge model."""
@@ -30,7 +32,6 @@ class Gauge(Model):
     decimals = IntegerField(default=DEFAULT_DECIMALS)
     total_supply = FloatField()
     bribe_address = TextField(index=True)
-    fees_address = TextField(index=True)
     wrapped_bribe_address = TextField(index=True)
     # Per epoch...
     reward = FloatField()
@@ -45,7 +46,6 @@ class Gauge(Model):
 
     # TODO: Backwards compat. Remove once no longer needed...
     bribeAddress = TextField()
-    feesAddress = TextField()
     totalSupply = FloatField()
 
     @classmethod
@@ -64,6 +64,21 @@ class Gauge(Model):
         """Fetches pair/pool gauge data from chain."""
         address = address.lower()
 
+        # a = Call(
+        #         address,
+        #         'totalSupply()(uint256)',
+        #         [['total_supply', None]]
+        #     )()
+        # b = Call(
+        #         address,
+        #         ['rewardRate(address)(uint256)', DEFAULT_TOKEN_ADDRESS],
+        #         [['reward_rate', None]]
+        #     )()
+        # c = Call(
+        #         VOTER_ADDRESS,
+        #         ['external_bribes(address)(address)', address],
+        #         [['bribe_address', None]]
+        #     )()
         pair_gauge_multi = Multicall([
             Call(
                 address,
@@ -80,13 +95,9 @@ class Gauge(Model):
                 ['external_bribes(address)(address)', address],
                 [['bribe_address', None]]
             ),
-            Call(
-                VOTER_ADDRESS,
-                ['internal_bribes(address)(address)', address],
-                [['fees_address', None]]
-            )
         ])
 
+        # data = {**a, **b, **c}
         data = pair_gauge_multi()
         data['decimals'] = cls.DEFAULT_DECIMALS
         data['total_supply'] = data['total_supply'] / data['decimals']
@@ -98,7 +109,6 @@ class Gauge(Model):
 
         # TODO: Remove once no longer needed...
         data['bribeAddress'] = data['bribe_address']
-        data['feesAddress'] = data['fees_address']
         data['totalSupply'] = data['total_supply']
 
         if data.get('bribe_address') not in (ADDRESS_ZERO, None):
@@ -108,8 +118,8 @@ class Gauge(Model):
             )()
 
         if data.get('wrapped_bribe_address') in (ADDRESS_ZERO, ''):
-                cls.create_wrapped_bribe(data['bribe_address'])
-                data['wrapped_bribe_address'] = Call(
+            cls.create_wrapped_bribe(data['bribe_address'])
+            data['wrapped_bribe_address'] = Call(
                 WRAPPED_BRIBE_FACTORY_ADDRESS,
                 ['oldBribeToNew(address)(address)', data['bribe_address']]
             )()
@@ -123,28 +133,28 @@ class Gauge(Model):
         if data.get('wrapped_bribe_address') not in (ADDRESS_ZERO, None):
             cls._fetch_external_rewards(gauge)
 
-        cls._fetch_internal_rewards(gauge)
         cls._update_apr(gauge)
 
         return gauge
 
     @classmethod
     def create_wrapped_bribe(cls, bribe_address):
-        wrapped_bribe_factory_contract = w3.eth.contract(address=WRAPPED_BRIBE_FACTORY_ADDRESS, abi=WRAPPED_BRIBE_ABI)
-        nonce = w3.eth.get_transaction_count(account.address)  
-        
+        wrapped_bribe_factory_contract = w3.eth.contract(
+            address=WRAPPED_BRIBE_FACTORY_ADDRESS, abi=WRAPPED_BRIBE_ABI)
+        nonce = w3.eth.get_transaction_count(account.address)
+
         checksum_address = w3.toChecksumAddress(bribe_address)
         create_bribe_txn = wrapped_bribe_factory_contract.functions.createBribe(checksum_address).buildTransaction({
-            'chainId': 42161,
-            'maxFeePerGas': w3.toWei('0.1', 'gwei'),
-            'maxPriorityFeePerGas': w3.toWei('0.1', 'gwei'),
+            'chainId': 7700,
+            # 'maxFeePerGas': w3.toWei('0.1', 'gwei'),
+            # 'maxPriorityFeePerGas': w3.toWei('0.1', 'gwei'),
             'nonce': nonce,
         })
 
-        signed_txn = w3.eth.account.sign_transaction(create_bribe_txn, private_key=PRIVATE_KEY)
-        w3.eth.send_raw_transaction(signed_txn.rawTransaction)  
+        signed_txn = w3.eth.account.sign_transaction(
+            create_bribe_txn, private_key=PRIVATE_KEY)
+        w3.eth.send_raw_transaction(signed_txn.rawTransaction)
         sent = w3.toHex(w3.keccak(signed_txn.rawTransaction))
-        LOGGER.info('Created tx: ', sent)
 
     @classmethod
     @CACHER.cached(timeout=(1 * DAY_IN_SECONDS))
@@ -205,6 +215,9 @@ class Gauge(Model):
                     [[bribe_token_address, None]]
                 )
             )
+        # _data = {}
+        # for call in reward_calls:
+        #     _data = {**_data, **call()}
 
         data = Multicall(reward_calls)()
 
@@ -223,57 +236,6 @@ class Gauge(Model):
                 gauge.address,
                 bribe_token_address,
                 gauge.rewards[token.address]
-            )
-
-        gauge.save()
-
-    @classmethod
-    def _fetch_internal_rewards(cls, gauge):
-        """Fetches gauge internal rewards (fees) data from chain."""
-        # Avoid circular import...
-        from app.pairs.model import Pair
-
-        pair = Pair.get(Pair.gauge_address == gauge.address)
-
-        fees_data = Multicall([
-            Call(
-                gauge.fees_address,
-                ['left(address)(uint256)', pair.token0_address],
-                [['fees0', None]]
-            ),
-            Call(
-                gauge.fees_address,
-                ['left(address)(uint256)', pair.token1_address],
-                [['fees1', None]]
-            )
-        ])()
-
-        fees = [
-            [pair.token0_address, fees_data['fees0']],
-            [pair.token1_address, fees_data['fees1']]
-        ]
-
-        for (token_address, fee) in fees:
-            token = Token.find(token_address)
-
-            if gauge.rewards.get(token_address):
-                gauge.rewards[token_address] = (
-                    float(gauge.rewards[token_address]) + (
-                        fee / 10**token.decimals
-                    )
-                )
-            elif fee > 0:
-                gauge.rewards[token_address] = fee / 10**token.decimals
-
-            if token.price:
-                gauge.tbv += fee / 10**token.decimals * token.price
-
-            LOGGER.debug(
-                'Fetched %s:%s internal reward %s:%s.',
-                cls.__name__,
-                gauge.address,
-                token_address,
-                gauge.rewards[token_address]
             )
 
         gauge.save()

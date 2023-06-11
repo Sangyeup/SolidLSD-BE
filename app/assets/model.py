@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from multicall import Call, Multicall
+from multicall import Call
+from app.canto_multicall import CantoMulticall as Multicall
 import requests
 import requests.exceptions
 from walrus import Model, TextField, IntegerField, FloatField
@@ -44,7 +45,8 @@ class Token(Model):
                         '250': 'fantom',
                         '10': 'optimism',
                         '137': 'polygon',
-                        '42220': 'celo'}
+                        '42220': 'celo',
+                        '7700': 'canto'}
 
     def debank_price_in_stables(self):
         """Returns the price quoted from DeBank"""
@@ -84,7 +86,7 @@ class Token(Model):
             chain_name = self.CHAIN_NAMES[str(self.nativeChainId)]
             chain_token = chain_name + ':' + self.nativeChainAddress.lower()
         else:
-            chain_token = 'optimism:' + self.address.lower()
+            chain_token = 'canto:' + self.address.lower()
 
         res = requests.get(self.DEFILLAMA_ENDPOINT + chain_token).json()
         coins = res.get('coins', {})
@@ -144,7 +146,7 @@ class Token(Model):
         price = 0
 
         for prices in sorted_pairs:
-            if prices['baseToken']['address'].lower() == self.address.lower():
+            if prices['baseToken']['address'].lower() == self.address.lower() and prices['baseToken']['symbol'] == self.symbol:
                 # To avoid this kek...
                 #   ValueError: could not convert string to float: '1,272.43'
                 price = str(prices.get('priceUsd') or 0).replace(',', '')
@@ -206,9 +208,8 @@ class Token(Model):
         if self.price == 0:
             self.price = self.chain_price_in_stables()
 
-        if self.price == 0:
-            self.price = self.debank_price_in_stables()
-
+        # if self.price == 0:
+        #     self.price = self.debank_price_in_stables()
         self.save()
 
     @classmethod
@@ -216,6 +217,10 @@ class Token(Model):
         address = address.lower()
 
         """Fetches and returns a token from chain."""
+        
+        # a=    Call(address, ['name()(string)'], [['name', None]])()
+        # b=    Call(address, ['symbol()(string)'], [['symbol', None]])()
+        # c=    Call(address, ['decimals()(uint8)'], [['decimals', None]])()
         token_multi = Multicall([
             Call(address, ['name()(string)'], [['name', None]]),
             Call(address, ['symbol()(string)'], [['symbol', None]]),

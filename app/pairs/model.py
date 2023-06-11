@@ -2,7 +2,8 @@
 
 import math
 
-from multicall import Call, Multicall
+from multicall import Call
+from app.canto_multicall import CantoMulticall as Multicall
 from walrus import Model, TextField, IntegerField, BooleanField, FloatField
 from web3.constants import ADDRESS_ZERO
 
@@ -88,6 +89,9 @@ class Pair(Model):
     def chain_addresses(cls):
         """Fetches pairs/pools from chain."""
         pairs_count = Call(FACTORY_ADDRESS, 'allPairsLength()(uint256)')()
+        # arr = []
+        # for idx in range(0, pairs_count):
+        #     arr.append(Call(FACTORY_ADDRESS, ['allPairs(uint256)(address)', idx])())
 
         pairs_multi = Multicall([
             Call(
@@ -104,6 +108,24 @@ class Pair(Model):
     def from_chain(cls, address):
         """Fetches pair/pool data from chain."""
         address = address.lower()
+
+        # a = Call(address,
+        #         'getReserves()(uint256,uint256)', [['reserve0', None], ['reserve1', None]])()
+        # b = Call(address, 'token0()(address)', [['token0_address', None]])()
+        # c = Call(address, 'token1()(address)', [['token1_address', None]])()
+        # k = Call(
+        #         address,
+        #         'totalSupply()(uint256)',
+        #         [['total_supply', None]]
+        #     )()
+        # d = Call(address, 'symbol()(string)', [['symbol', None]])()
+        # e = Call(address, 'decimals()(uint8)', [['decimals', None]])()
+        # f = Call(address, 'stable()(bool)', [['stable', None]])()
+        # g = Call(
+        #         VOTER_ADDRESS,
+        #         ['gauges(address)(address)', address],
+        #         [['gauge_address', None]]
+        #     )()
 
         pair_multi = Multicall([
             Call(
