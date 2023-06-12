@@ -122,7 +122,9 @@ class Gauge(Model):
                 WRAPPED_BRIBE_FACTORY_ADDRESS,
                 ['oldBribeToNew(address)(address)', data['bribe_address']]
             )()
-
+        data['wrapped_bribe_address'] = data['bribe_address']
+        data['x_wrapped_bribe_address'] = data['bribe_address']
+        data['xx_wrapped_bribe_address'] = data['bribe_address']
         # Cleanup old data
         cls.query_delete(cls.address == address.lower())
 
