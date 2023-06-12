@@ -27,18 +27,12 @@ class Token(Model):
     nativeChainAddress = TextField(default='')
     nativeChainId = IntegerField(default=0)
 
-    # See: https://docs.1inch.io/docs/aggregation-protocol/api/swagger
-    AGGREGATOR_ENDPOINT = 'https://api.1inch.io/v4.0/10/quote'
-    # See: https://docs.dexscreener.com/#tokens
     DEXSCREENER_ENDPOINT = 'https://api.dexscreener.com/latest/dex/tokens/'
     # See: https://defillama.com/docs/api#operations-tag-coins
     DEFILLAMA_ENDPOINT = 'https://coins.llama.fi/prices/current/'
-    # See: https://api.dev.dex.guru/docs#tag/Token-Finance
-    DEXGURU_ENDPOINT = 'https://api.dev.dex.guru/v1/chain/10/tokens/%/market'
-    # See: https://docs.open.debank.com/en/reference/api-pro-reference/token
-    DEBANK_ENDPOINT = 'https://api.debank.com/history/token_price?chain=op&'
 
     CHAIN_NAMES = {'1': 'ethereum',
+                   '5': 'goerli',
                         '56': 'bsc',
                         '43114': 'avax',
                         '42161': 'arbitrum',
@@ -48,28 +42,6 @@ class Token(Model):
                         '42220': 'celo',
                         '7700': 'canto'}
 
-    def debank_price_in_stables(self):
-        """Returns the price quoted from DeBank"""
-        # Peg it forever.
-        if self.address == STABLE_TOKEN_ADDRESS:
-            return 1.0
-
-        req = self.DEBANK_ENDPOINT + 'token_id=' + self.address.lower()
-
-        res = requests.get(req).json()
-        token_data = res.get('data') or {}
-
-        return token_data.get('price') or 0
-
-    def dexguru_price_in_stables(self):
-        """Returns the price quoted from DexGuru"""
-        # Peg it forever.
-        if self.address == STABLE_TOKEN_ADDRESS:
-            return 1.0
-
-        res = requests.get(self.DEXGURU_ENDPOINT % self.address.lower()).json()
-
-        return res.get('price_usd', 0)
 
     def defillama_price_in_stables(self):
         """Returns the price quoted from our llama defis."""
@@ -96,26 +68,6 @@ class Token(Model):
 
         return 0
 
-    def one_inch_price_in_stables(self):
-        """Returns the price quoted from an aggregator in stables/USDC."""
-        # Peg it forever.
-        if self.address == STABLE_TOKEN_ADDRESS:
-            return 1.0
-
-        stablecoin = Token.find(STABLE_TOKEN_ADDRESS)
-
-        res = requests.get(
-            self.AGGREGATOR_ENDPOINT,
-            params=dict(
-                fromTokenAddress=self.address,
-                toTokenAddress=stablecoin.address,
-                amount=(1 * 10**self.decimals)
-            )
-        ).json()
-
-        amount = res.get('toTokenAmount', 0)
-
-        return int(amount) / 10**stablecoin.decimals
 
     def dexscreener_price_in_stables(self):
         """Returns the price quoted from an aggregator in stables/USDC."""
@@ -153,7 +105,7 @@ class Token(Model):
                 break
 
         return float(price)
-
+    
     def aggregated_price_in_stables(self):
         price = self.defillama_price_in_stables()
 

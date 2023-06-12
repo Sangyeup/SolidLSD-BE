@@ -151,13 +151,12 @@ class Pair(Model):
         ])
 
         data = pair_multi()
-
         data['address'] = address
         data['total_supply'] = data['total_supply'] / (10**data['decimals'])
 
         token0 = Token.find(data['token0_address'])
         token1 = Token.find(data['token1_address'])
-
+        
         data['reserve0'] = data['reserve0'] / (10**token0.decimals)
         data['reserve1'] = data['reserve1'] / (10**token1.decimals)
 
@@ -177,7 +176,6 @@ class Pair(Model):
 
         pair = cls.create(**data)
         LOGGER.debug('Fetched %s:%s.', cls.__name__, pair.address)
-
         pair.syncup_gauge()
 
         return pair

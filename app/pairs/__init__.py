@@ -21,8 +21,9 @@ class Pairs(object):
     @classmethod
     def serialize(cls):
         pairs = []
-
+        print(pairs)
         for pair in Pair.all():
+            print(pair)
             data = pair._data
             data['token0'] = Token.find(pair.token0_address)._data
             data['token1'] = Token.find(pair.token1_address)._data

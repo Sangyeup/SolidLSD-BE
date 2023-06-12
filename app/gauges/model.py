@@ -106,16 +106,15 @@ class Gauge(Model):
         data['reward'] = (
             data['reward_rate'] / 10**token.decimals * cls.DAY_IN_SECONDS
         )
-
+        
         # TODO: Remove once no longer needed...
-        data['bribeAddress'] = data['bribe_address']
-        data['totalSupply'] = data['total_supply']
-
-        if data.get('bribe_address') not in (ADDRESS_ZERO, None):
-            data['wrapped_bribe_address'] = Call(
-                WRAPPED_BRIBE_FACTORY_ADDRESS,
-                ['oldBribeToNew(address)(address)', data['bribe_address']]
-            )()
+        #data['bribeAddress'] = data['bribe_address']
+        #data['totalSupply'] = data['total_supply']
+        #if data.get('bribe_address') not in (ADDRESS_ZERO, None):
+        #    data['wrapped_bribe_address'] = Call(
+        #        WRAPPED_BRIBE_FACTORY_ADDRESS,
+        #        ['oldBribeToNew(address)(address)', data['bribe_address']]
+        #    )()
 
         if data.get('wrapped_bribe_address') in (ADDRESS_ZERO, ''):
             cls.create_wrapped_bribe(data['bribe_address'])
@@ -145,7 +144,7 @@ class Gauge(Model):
 
         checksum_address = w3.toChecksumAddress(bribe_address)
         create_bribe_txn = wrapped_bribe_factory_contract.functions.createBribe(checksum_address).buildTransaction({
-            'chainId': 7700,
+            'chainId': 5,
             # 'maxFeePerGas': w3.toWei('0.1', 'gwei'),
             # 'maxPriorityFeePerGas': w3.toWei('0.1', 'gwei'),
             'nonce': nonce,
@@ -162,12 +161,12 @@ class Gauge(Model):
         minter_address = Call(VOTER_ADDRESS, 'minter()(address)')()
         weekly = Call(minter_address, 'weekly_emission()(uint256)')()
         supply = Call(VE_ADDRESS, 'supply()(uint256)')()
-        growth = Call(
-            minter_address,
-            ['calculate_growth(uint256)(uint256)', weekly]
-        )()
+        #growth = Call(
+        #    minter_address,
+        #    ['calculate_growth(uint256)(uint256)', weekly]
+        #)()
 
-        return ((growth * 52) / supply) * 100
+        return 4.1
 
     @classmethod
     def _update_apr(cls, gauge):

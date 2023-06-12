@@ -23,7 +23,7 @@ def sync():
 
     with ThreadPool(int(os.getenv('SYNC_MAX_THREADS', 4))) as pool:
         addresses = Pair.chain_addresses()
-
+        print(addresses)
         LOGGER.debug(
             'Syncing %s pairs using %s threads...',
             len(addresses),
