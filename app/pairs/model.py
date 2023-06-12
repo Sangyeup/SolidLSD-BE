@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-
 import math
 
 from multicall import Call
@@ -177,7 +176,6 @@ class Pair(Model):
         pair = cls.create(**data)
         LOGGER.debug('Fetched %s:%s.', cls.__name__, pair.address)
         pair.syncup_gauge()
-
         return pair
 
     @classmethod

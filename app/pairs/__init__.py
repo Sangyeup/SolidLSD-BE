@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
-
+import os
 import json
+from multiprocessing import Process
+from multiprocessing.pool import ThreadPool
 
 import falcon
 from web3 import Web3
 
 from .model import Pair
-from app.assets import Token
+from app.assets import Assets, Token
 from app.gauges import Gauge
 from app.misc import JSONEncoder
 from app.settings import CACHE, LOGGER
@@ -17,13 +19,21 @@ class Pairs(object):
     # Seconds to expire the cache, a bit longer than the syncer schedule...
 
     CACHE_KEY = 'pairs:json'
-
+    
     @classmethod
     def serialize(cls):
         pairs = []
-        print(pairs)
+        
+        Token.from_tokenlists()
+        Assets.recache()
+
+        with ThreadPool(int(os.getenv('SYNC_MAX_THREADS', 4))) as pool:
+            addresses = Pair.chain_addresses()
+            pool.map(Pair.from_chain, addresses)
+            pool.close()
+            pool.join()
+
         for pair in Pair.all():
-            print(pair)
             data = pair._data
             data['token0'] = Token.find(pair.token0_address)._data
             data['token1'] = Token.find(pair.token1_address)._data
@@ -46,11 +56,12 @@ class Pairs(object):
             pairs.append(data)
 
         return pairs
+    
+
 
     @classmethod
     def recache(cls):
         pairs = json.dumps(dict(data=cls.serialize()), cls=JSONEncoder)
-
         CACHE.set(cls.CACHE_KEY, pairs)
         LOGGER.debug('Cache updated for %s.', cls.CACHE_KEY)
 
@@ -72,12 +83,7 @@ class Pairs(object):
 
     def on_get(self, req, resp):
         """Returns cached liquidity pools/pairs"""
-        self.resync(
-            req.get_param('pair_address'),
-            req.get_param('gauge_address')
-        )
-
-        pairs = CACHE.get(self.CACHE_KEY) or Pairs.recache()
-
+       
+        pairs = Pairs.recache()
         resp.status = falcon.HTTP_200
         resp.text = pairs
