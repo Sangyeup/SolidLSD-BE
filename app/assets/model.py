@@ -193,11 +193,10 @@ class Token(Model):
     def from_tokenlists(cls):
         """Fetches and merges all the tokens from available tokenlists."""
         our_chain_id = w3.eth.chain_id
-
         for tlist in TOKENLISTS:
             try:
                 res = requests.get(tlist).json()
-                for token_data in res['tokens']:
+                for token_data in res:
                     # Skip tokens from other chains...
                     if token_data.get('chainId', None) != our_chain_id:
                         continue
